@@ -1,0 +1,2 @@
+# remini.bot
+Im kurdish
