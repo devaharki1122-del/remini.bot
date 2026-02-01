@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 # ===== TOKENS IN CODE =====
-BOT_TOKEN = "8231599662:AAERL7v8r2TmITuql6P6Bf4I729qlzedNE"
+BOT_TOKEN = "8231599662:AAF35ZhcQH5JjkgQQZ1m4d-M2eXOGZJosr0"
 REPLICATE_API_TOKEN = "r8_OR9q5BvZ6E2ZbHD3njW8PRegnOEYrgL4WxDgA"
 
 logging.basicConfig(level=logging.INFO)
