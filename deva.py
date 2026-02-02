@@ -1,80 +1,151 @@
+import os
+import replicate
 import logging
-import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
-# ===== TOKENS IN CODE =====
-BOT_TOKEN = "8231599662:AAF35ZhcQH5JjkgQQZ1m4d-M2eXOGZJosr0"
-REPLICATE_API_TOKEN = "r8_OR9q5BvZ6E2ZbHD3njW8PRegnOEYrgL4WxDgA"
+# ========= CONFIG =========
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+ADMIN_ID = 8186735286
+FORCE_CHANNELS = ["@chanaly_boot", "@team_988"]
 
+os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
 logging.basicConfig(level=logging.INFO)
 
-# ===== START MENU =====
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+users = set()
+
+# ========= FORCE JOIN CHECK =========
+async def check_force_join(user_id, bot):
+    for channel in FORCE_CHANNELS:
+        member = await bot.get_chat_member(channel, user_id)
+        if member.status in ["left", "kicked"]:
+            return False
+    return True
+
+
+async def force_join_msg(update: Update):
     keyboard = [
-        [InlineKeyboardButton("🖼 جوانکردنی وێنە 4K", callback_data="photo")]
+        [InlineKeyboardButton("📢 Join Channel 1", url="https://t.me/chanaly_boot")],
+        [InlineKeyboardButton("📢 Join Channel 2", url="https://t.me/team_988")],
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("بەخێربێیت 🤖\nوێنە بنێرە بۆ جوانکردن:", reply_markup=reply_markup)
+    await update.message.reply_text(
+        "⚠️ پێویستە سەرەتا جوین بیت بەم چەنالانە:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
-# ===== BUTTON =====
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text("وێنە بنێرە 📸")
 
-# ===== REPLICATE FUNCTION =====
-def enhance_image(image_url):
-    url = "https://api.replicate.com/v1/predictions"
-    headers = {
-        "Authorization": f"Token {REPLICATE_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "version": "42fed1c4977a9b8f60c9c0d3d7d8b6b6e8b5b5f5a5a5a5a5a5a5a5a5a5a5a5a",  # real-esrgan
-        "input": {
-            "image": image_url,
-            "scale": 4
-        }
-    }
+# ========= START =========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    users.add(user_id)
 
-    response = requests.post(url, json=data, headers=headers)
-    prediction = response.json()
+    joined = await check_force_join(user_id, context.bot)
+    if not joined:
+        await force_join_msg(update)
+        return
 
-    # wait for result
-    get_url = prediction["urls"]["get"]
-    while True:
-        r = requests.get(get_url, headers=headers).json()
-        if r["status"] == "succeeded":
-            return r["output"]
-        elif r["status"] == "failed":
-            return None
-
-# ===== PHOTO HANDLER =====
-async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ چاوەڕێبە... وێنەکەت 4K دەکرێت")
-
-    photo = update.message.photo[-1]
-    file = await photo.get_file()
-    image_url = file.file_path
-
-    result = enhance_image(image_url)
-
-    if result:
-        await update.message.reply_photo(result)
+    if user_id == ADMIN_ID:
+        keyboard = [["🖼 Enhance Image"], ["📊 Admin Panel"]]
     else:
-        await update.message.reply_text("هەڵەیەک ڕوویدا ❌")
+        keyboard = [["🖼 Enhance Image"]]
 
-# ===== MAIN =====
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    await update.message.reply_text(
+        "بەخێربێیت 🤖",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+    )
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-    app.add_handler(MessageHandler(filters.ALL, buttons))
 
-    print("Bot is running...")
-    app.run_polling()
+# ========= ADMIN PANEL =========
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
 
-if __name__ == "__main__":
-    main()
+    keyboard = [["📊 Stats"], ["📢 Broadcast"]]
+    await update.message.reply_text(
+        "👨‍💻 Admin Panel",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+    )
+
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.message.reply_text(f"👥 Users: {len(users)}")
+
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    await update.message.reply_text("نوسینەکە بنێرە بۆ ناردن بۆ هەموو یوزەرەکان:")
+    context.user_data["broadcast"] = True
+
+
+async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("broadcast"):
+        for user in users:
+            try:
+                await context.bot.send_message(chat_id=user, text=update.message.text)
+            except:
+                pass
+        context.user_data["broadcast"] = False
+        await update.message.reply_text("✅ نێردرا")
+
+
+# ========= FACE ENHANCE =========
+async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    joined = await check_force_join(user_id, context.bot)
+
+    if not joined:
+        await force_join_msg(update)
+        return
+
+    photo = await update.message.photo[-1].get_file()
+    await photo.download_to_drive("input.jpg")
+
+    await update.message.reply_text("⏳ ڕووخسار جوان دەکەین...")
+
+    output = replicate.run(
+        "tencentarc/gfpgan",
+        input={
+            "img": open("input.jpg", "rb"),
+            "version": "1.4",
+            "scale": 2,
+        },
+    )
+
+    with open("output.png", "wb") as f:
+        f.write(output.read())
+
+    await update.message.reply_photo(
+        photo=open("output.png", "rb"),
+        caption="✨ ڕووخسار جوان کرا",
+    )
+
+
+# ========= MAIN =========
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.Regex("🖼 Enhance Image"), start))
+app.add_handler(MessageHandler(filters.Regex("📊 Admin Panel"), admin_panel))
+app.add_handler(MessageHandler(filters.Regex("📊 Stats"), stats))
+app.add_handler(MessageHandler(filters.Regex("📢 Broadcast"), broadcast))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast))
+app.add_handler(MessageHandler(filters.PHOTO, enhance_face))
+
+print("Bot Running...")
+app.run_polling()
