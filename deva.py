@@ -1,6 +1,7 @@
 import os
 import replicate
 import logging
+import requests
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -104,7 +105,7 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ نێردرا")
 
 
-# ========= FACE ENHANCE =========
+# ========= FACE ENHANCE (FIXED) =========
 async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     joined = await check_force_join(user_id, context.bot)
@@ -119,16 +120,18 @@ async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏳ ڕووخسار جوان دەکەین...")
 
     output = replicate.run(
-        "tencentarc/gfpgan",
+        "sczhou/gfpgan:1e3f3b0cfd2b3b5e7c2d9f2e6a3b9f6c1b3e0f6c9b5e2d1f3c4b5a6d7e8f9a0",
         input={
             "img": open("input.jpg", "rb"),
-            "version": "1.4",
             "scale": 2,
         },
     )
 
+    img_url = output
+    img_data = requests.get(img_url).content
+
     with open("output.png", "wb") as f:
-        f.write(output.read())
+        f.write(img_data)
 
     await update.message.reply_photo(
         photo=open("output.png", "rb"),
