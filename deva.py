@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO)
 
 users = set()
 
-# ========= FORCE JOIN CHECK =========
+# ========= FORCE JOIN =========
 async def check_force_join(user_id, bot):
     for channel in FORCE_CHANNELS:
         member = await bot.get_chat_member(channel, user_id)
@@ -42,95 +42,76 @@ async def force_join_msg(update: Update):
         [InlineKeyboardButton("📢 Join Channel 2", url="https://t.me/team_988")],
     ]
     await update.message.reply_text(
-        "⚠️ پێویستە سەرەتا جوین بیت بەم چەنالانە:",
+        "⚠️ سەرەتا جوین ببە بەم چەنالانە:",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
-
 
 # ========= START =========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     users.add(user_id)
 
-    joined = await check_force_join(user_id, context.bot)
-    if not joined:
+    if not await check_force_join(user_id, context.bot):
         await force_join_msg(update)
         return
 
+    keyboard = [["🖼 Enhance Image"]]
     if user_id == ADMIN_ID:
-        keyboard = [["🖼 Enhance Image"], ["📊 Admin Panel"]]
-    else:
-        keyboard = [["🖼 Enhance Image"]]
+        keyboard.append(["📊 Admin Panel"])
 
     await update.message.reply_text(
         "بەخێربێیت 🤖",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
     )
 
-
-# ========= ADMIN PANEL =========
+# ========= ADMIN =========
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-
     keyboard = [["📊 Stats"], ["📢 Broadcast"]]
     await update.message.reply_text(
         "👨‍💻 Admin Panel",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
     )
 
-
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.message.reply_text(f"👥 Users: {len(users)}")
-
+    if update.effective_user.id == ADMIN_ID:
+        await update.message.reply_text(f"👥 Users: {len(users)}")
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    await update.message.reply_text("نوسینەکە بنێرە بۆ ناردن بۆ هەموو یوزەرەکان:")
-    context.user_data["broadcast"] = True
-
+    if update.effective_user.id == ADMIN_ID:
+        context.user_data["broadcast"] = True
+        await update.message.reply_text("نوسینەکە بنێرە:")
 
 async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("broadcast"):
         for user in users:
             try:
-                await context.bot.send_message(chat_id=user, text=update.message.text)
+                await context.bot.send_message(user, update.message.text)
             except:
                 pass
         context.user_data["broadcast"] = False
         await update.message.reply_text("✅ نێردرا")
 
-
-# ========= FACE ENHANCE (FIXED 100%) =========
+# ========= ENHANCE FACE =========
 async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    joined = await check_force_join(user_id, context.bot)
 
-    if not joined:
+    if not await check_force_join(user_id, context.bot):
         await force_join_msg(update)
         return
 
     photo = await update.message.photo[-1].get_file()
     await photo.download_to_drive("input.jpg")
 
-    await update.message.reply_text("⏳ ڕووخسار جوان دەکەین...")
+    await update.message.reply_text("⏳ چاوەڕێ بکە...")
 
-    # ✅ Correct Replicate version (no more 404 / 422)
     output = replicate.run(
         "sczhou/gfpgan:1e3f3b0cfd2b3b5e7c2d9f2e6a3b9f6c1b3e0f6c9b5e2d1f3c4b5a6d7e8f9a0",
-        input={
-            "img": open("input.jpg", "rb"),
-            "scale": 2,
-        },
+        input={"img": open("input.jpg", "rb"), "scale": 2},
     )
 
-    img_url = output
-    img_data = requests.get(img_url).content
-
+    img_data = requests.get(output).content
     with open("output.png", "wb") as f:
         f.write(img_data)
 
@@ -138,7 +119,6 @@ async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
         photo=open("output.png", "rb"),
         caption="✨ ڕووخسار جوان کرا",
     )
-
 
 # ========= MAIN =========
 app = ApplicationBuilder().token(BOT_TOKEN).build()
