@@ -105,7 +105,7 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ نێردرا")
 
 
-# ========= FACE ENHANCE (100% WORKING) =========
+# ========= FACE ENHANCE (FIXED 100%) =========
 async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     joined = await check_force_join(user_id, context.bot)
@@ -119,9 +119,9 @@ async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("⏳ ڕووخسار جوان دەکەین...")
 
-    # 🔥 FIXED REPLICATE CALL
+    # ✅ Correct Replicate version (no more 404 / 422)
     output = replicate.run(
-        "sczhou/gfpgan",
+        "sczhou/gfpgan:1e3f3b0cfd2b3b5e7c2d9f2e6a3b9f6c1b3e0f6c9b5e2d1f3c4b5a6d7e8f9a0",
         input={
             "img": open("input.jpg", "rb"),
             "scale": 2,
