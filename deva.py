@@ -1,149 +1,82 @@
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import openai, speech_recognition as sr
+from pydub import AudioSegment
 import os
-import logging
-import requests
-import replicate
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
-)
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+# ========== CONFIG ==========
+BOT_TOKEN = "8255597665:AAHGs-7xHckM96XmzmaF_qwhj8SjG87EIN8"
+API_ID = 32052427
+API_HASH = "d9e14b1e99ac33e20d41479a47d2622f"
+OPENAI_API_KEY = "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"
 
-# ========= CONFIG =========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
-ADMIN_ID = 8186735286
-FORCE_CHANNELS = ["@chanaly_boot", "@team_988"]
+openai.api_key = OPENAI_API_KEY
 
-os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
-logging.basicConfig(level=logging.INFO)
+ADMINS = [8186735286]
 
-users = set()
+app = Client("voice_gpt_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
-# ========= FORCE JOIN CHECK =========
-async def check_force_join(user_id, bot):
-    for channel in FORCE_CHANNELS:
-        member = await bot.get_chat_member(channel, user_id)
-        if member.status in ["left", "kicked"]:
-            return False
-    return True
+# ========== BUTTONS ==========
+def buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎵 بوتی تیکتۆک", url="https://t.me/Tiktok_112_bot")],
+        [InlineKeyboardButton("👤 نامە بۆ خاوەن بوت", url="https://t.me/Deva_harki")],
+        [InlineKeyboardButton("🟢 جەنالی 1", url="https://t.me/chanaly_boot")],
+        [InlineKeyboardButton("🟢 جەنالی 2", url="https://t.me/team_988")]
+    ])
 
-
-async def force_join_msg(update: Update):
-    keyboard = [
-        [InlineKeyboardButton("📢 Join Channel 1", url="https://t.me/chanaly_boot")],
-        [InlineKeyboardButton("📢 Join Channel 2", url="https://t.me/team_988")],
-    ]
-    await update.message.reply_text(
-        "⚠️ پێویستە سەرەتا جوین بیت بەم چەنالانە:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+# ========== GPT ==========
+async def gpt(text):
+    r = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "وەکو مرۆڤ، زیرەک، دۆستانە و ڕوون وەڵام بدە"},
+            {"role": "user", "content": text}
+        ],
+        temperature=0.8,
+        max_tokens=500
     )
+    return r.choices[0].message.content
 
-# ========= START =========
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    users.add(user_id)
+# ========== TEXT ==========
+@app.on_message(filters.text)
+async def text_handler(c, m):
+    reply = await gpt(m.text)
+    await m.reply_text(reply, reply_markup=buttons())
 
-    joined = await check_force_join(user_id, context.bot)
-    if not joined:
-        await force_join_msg(update)
-        return
+# ========== VOICE ==========
+@app.on_message(filters.voice)
+async def voice_handler(c, m):
+    voice_file = await m.download()
+    sound = AudioSegment.from_ogg(voice_file)
+    wav_path = voice_file.replace(".ogg", ".wav")
+    sound.export(wav_path, format="wav")
 
-    if user_id == ADMIN_ID:
-        keyboard = [["🖼 Enhance Image"], ["📊 Admin Panel"]]
-    else:
-        keyboard = [["🖼 Enhance Image"]]
+    r = sr.Recognizer()
+    with sr.AudioFile(wav_path) as source:
+        audio = r.record(source)
+        text = r.recognize_google(audio, language="ar")
 
-    await update.message.reply_text(
-        "بەخێربێیت 🤖",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
-    )
+    reply = await gpt(text)
+    await m.reply_text(reply, reply_markup=buttons())
 
-# ========= ADMIN PANEL =========
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
+    os.remove(voice_file)
+    os.remove(wav_path)
 
-    keyboard = [["📊 Stats"], ["📢 Broadcast"]]
-    await update.message.reply_text(
-        "👨‍💻 Admin Panel",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
-    )
+# ========== PHOTO ==========
+@app.on_message(filters.photo)
+async def photo_handler(c, m):
+    reply = await gpt("ئەم وێنەیە وەکو مرۆڤ باسی بکە")
+    await m.reply_text(reply, reply_markup=buttons())
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.message.reply_text(f"👥 Users: {len(users)}")
+# ========== ADMIN PANEL ==========
+@app.on_message(filters.user(ADMINS) & filters.command("admin"))
+async def admin(c, m):
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 ستاتس", callback_data="stats")],
+        [InlineKeyboardButton("🔒 Force Join", url="https://t.me/chanaly_boot")]
+    ])
+    await m.reply_text("⚡ ئەدمین پانیل", reply_markup=kb)
 
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    await update.message.reply_text("نوسینەکە بنێرە بۆ ناردن بۆ هەموو یوزەرەکان:")
-    context.user_data["broadcast"] = True
-
-async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.user_data.get("broadcast"):
-        for user in users:
-            try:
-                await context.bot.send_message(chat_id=user, text=update.message.text)
-            except:
-                pass
-        context.user_data["broadcast"] = False
-        await update.message.reply_text("✅ نێردرا")
-
-# ========= FACE ENHANCE (WORKING 100%) =========
-async def enhance_face(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    joined = await check_force_join(user_id, context.bot)
-
-    if not joined:
-        await force_join_msg(update)
-        return
-
-    photo = await update.message.photo[-1].get_file()
-    await photo.download_to_drive("input.jpg")
-
-    await update.message.reply_text("⏳ ڕووخسار جوان دەکەین...")
-
-    # ✅ Official working Replicate model
-    output = replicate.run(
-        "sczhou/gfpgan",
-        input={
-            "img": open("input.jpg", "rb"),
-            "scale": 2,
-        },
-    )
-
-    img_url = output
-    img_data = requests.get(img_url).content
-
-    with open("output.png", "wb") as f:
-        f.write(img_data)
-
-    await update.message.reply_photo(
-        photo=open("output.png", "rb"),
-        caption="✨ ڕووخسار جوان کرا",
-    )
-
-# ========= MAIN =========
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.Regex("🖼 Enhance Image"), start))
-app.add_handler(MessageHandler(filters.Regex("📊 Admin Panel"), admin_panel))
-app.add_handler(MessageHandler(filters.Regex("📊 Stats"), stats))
-app.add_handler(MessageHandler(filters.Regex("📢 Broadcast"), broadcast))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast))
-app.add_handler(MessageHandler(filters.PHOTO, enhance_face))
-
-print("Bot Running...")
-app.run_polling()
+print("🤖 BOT RUNNING...")
+app.run()
