@@ -1,7 +1,2 @@
-pyrogram
-tgcrypto
-openai
-pillow
-SpeechRecognition
-pydub
-ffmpeg-python
+python-telegram-bot==20.7
+yt-dlp>=2024.0
